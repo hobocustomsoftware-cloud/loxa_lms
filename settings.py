@@ -8,7 +8,8 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure")
 # DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
 DEBUG = os.getenv("DEBUG","").lower() in ("1","true","yes")
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+# ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = ['lms.ai1.com.mm', 'web', 'localhost']
 
 
 

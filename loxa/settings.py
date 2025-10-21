@@ -7,7 +7,8 @@ from corsheaders.defaults import default_headers
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-development-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+#ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = ['lms.ai1.com.mm', 'web', 'localhost']
 ROOT_URLCONF = 'loxa.urls'
 WSGI_APPLICATION = 'loxa.wsgi.application'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
