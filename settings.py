@@ -73,6 +73,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'loxa.wsgi.application'
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://lms.ai1.com.mm',
+]
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases

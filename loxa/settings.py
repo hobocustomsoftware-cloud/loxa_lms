@@ -27,6 +27,10 @@ CSRF_COOKIE_SECURE = False
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://lms.ai1.com.mm',
+]
+
 # --- Custom User Models ---
 AUTH_USER_MODEL = "accounts.User"
 AUTH_ORG_MODEL = "accounts.Organization"
