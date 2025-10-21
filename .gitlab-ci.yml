@@ -1,0 +1,124 @@
+# Docker-in-Docker (dind) ကို သုံးပြီး Docker build လုပ်နိုင်ဖို့အတွက်
+image: docker:latest
+services:
+  - docker:dind
+
+# Global Variables များ
+variables:
+  REGISTRY_IMAGE: $CI_REGISTRY/$CI_PROJECT_PATH
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  # Test တွေအတွက် Database Service
+  POSTGRES_HOST: "postgres"
+  POSTGRES_DB: "ci_test_db"
+  POSTGRES_USER: "ci_user"
+  POSTGRES_PASSWORD: "ci_password" # ဒါကို GitLab Variables မှာ လျှို့ဝှက်ထည့်တာ ပိုကောင်းပါတယ်။
+
+stages:
+  - build_image
+  - test
+  - deploy
+
+# =======================================================
+# STAGE 1: Docker Image Build & Push
+# =======================================================
+build_and_push:
+  stage: build_image
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    
+    # Dockerfile ကို သုံးပြီး Image တည်ဆောက်ခြင်း
+    - docker build --pull -t $REGISTRY_IMAGE:$IMAGE_TAG .
+    
+    # Image ကို GitLab Container Registry ကို push လုပ်ခြင်း
+    - docker push $REGISTRY_IMAGE:$IMAGE_TAG
+  
+  # main branch မှာသာ run ရန်
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# =======================================================
+# STAGE 2: Testing (Database Migration & Unit Tests)
+# =======================================================
+unit_test:
+  stage: test
+  # ခုနက build ထားတဲ့ Image ကို သုံးပြီး run မယ်
+  image: $REGISTRY_IMAGE:$IMAGE_TAG
+  
+  # Test run ဖို့အတွက် Database Service ကို ခေါ်သုံးခြင်း
+  services:
+    - name: postgres:latest
+      alias: postgres # POSTGRES_HOST နဲ့ ကိုက်ညီရပါမယ်
+      
+  script:
+    - echo "Waiting for database to be ready..."
+    # Database ရဖို့ ခဏစောင့်ခြင်း
+    # ပိုမိုစိတ်ချရသော Database Health Check
+    # application image ထဲမှာ postgresql-client မရှိရင် install လုပ်ပါ
+    - apt-get update && apt-get install -y postgresql-client || (echo "postgresql-client not found, trying apk" && apk add postgresql-client) || echo "Could not install postgresql-client, proceeding with basic wait."
+    - |
+      for i in $(seq 1 30); do
+        pg_isready -h $POSTGRES_HOST -p 5432 -U $POSTGRES_USER && break
+        echo "Waiting for PostgreSQL... ($i/30)"
+        sleep 1
+      done
+    - pg_isready -h $POSTGRES_HOST -p 5432 -U $POSTGRES_USER || (echo "PostgreSQL not ready after 30 seconds" && exit 1)
+    
+    # Database migration တွေ အရင်လုပ်ခြင်း
+    # Test တွေ run တဲ့အခါမှာ makemigrations လုပ်စရာမလိုပါဘူး။ ရှိပြီးသား migration တွေကိုပဲ apply လုပ်ပါတယ်။
+    # makemigrations ကို local development မှာသာ လုပ်သင့်ပါတယ်။
+    # - python manage.py makemigrations
+    - python manage.py migrate
+    
+    # Django Test command ကို run ခြင်း
+    - python manage.py test
+    # Test ပြီးရင် Database ကို clean လုပ်ချင်ရင် ဒီနေရာမှာ ထည့်သွင်းနိုင်ပါတယ်။
+    # - python manage.py flush --no-input
+    
+  # main branch နဲ့ Merge Request တွေမှာ run ရန်
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# =======================================================
+# STAGE 3: Deployment (Production Server သို့)
+# =======================================================
+deploy_prod:
+  stage: deploy
+  image: alpine/ssh-client:latest # SSH ဝင်ဖို့အတွက် သုံးတဲ့ lightweight image
+  
+  # လိုအပ်တဲ့ Variables များ (GitLab Variables တွင် ထည့်သွင်းထားရန်)
+  # - $SSH_PRIVATE_KEY
+  # - $DEPLOY_SERVER_IP
+  # - $DEPLOY_USER
+  
+  script:
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    # Private Key ကို ထည့်သွင်းခြင်း
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan $DEPLOY_SERVER_IP >> ~/.ssh/known_hosts
+    
+    # SSH ဝင်ပြီး Server ပေါ်မှာ Docker Container အသစ်ကို ဆွဲတင်ခြင်း
+    - ssh $DEPLOY_USER@$DEPLOY_SERVER_IP "
+        docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY;
+        docker pull $REGISTRY_IMAGE:$IMAGE_TAG;
+        docker stop my_django_api || true;
+        docker rm my_django_api || true;
+        # Production Environment Variables တွေကို -e နဲ့ ထည့်သွင်းရန် (ဥပမာ)
+        # ဤနေရာရှိ 'your_...' များကို GitLab CI/CD Variables များဖြင့် အစားထိုးပါ။
+        docker run -d --name my_django_api -p 80:8000 \
+          -e DJANGO_DEBUG=0 \
+          -e DJANGO_SECRET_KEY='your_production_secret_key_here' \
+          -e DJANGO_ALLOWED_HOSTS='yourdomain.com,www.yourdomain.com' \
+          -e POSTGRES_DB='loxa_prod' \
+          -e POSTGRES_USER='loxa_user' \
+          -e POSTGRES_PASSWORD='your_secure_password' \
+          -e GOOGLE_CLIENT_ID='your_production_google_client_id' \
+          -e GOOGLE_CLIENT_SECRET='your_production_google_client_secret' \
+          $REGISTRY_IMAGE:$IMAGE_TAG;
+      "
+  environment: production
+  # main branch ကို Push မှသာ deploy လုပ်ရန်
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
