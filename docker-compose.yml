@@ -1,0 +1,89 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    image: loxa/web:latest
+    env_file:
+      - ./loxa/.env
+    environment:
+      DJANGO_SETTINGS_MODULE: loxa.settings
+      DJANGO_DEBUG: "1"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      STATIC_ROOT: /data/static
+      MEDIA_ROOT: /data/media
+      AGORA_APP_ID: ${AGORA_APP_ID:-}
+      AGORA_APP_CERT: ${AGORA_APP_CERT:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      GUNICORN_CMD_ARGS: "--bind 0.0.0.0:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - loxa_static:/data/static
+      - loxa_media:/data/media
+      - .:/app
+    # Gunicorn တစ်ခုတည်းကိုပဲ chạy
+    command: >
+      bash -lc "
+      python manage.py migrate &&
+      python manage.py collectstatic --noinput &&
+      gunicorn loxa.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+      "
+
+
+  nginx:
+    image: nginx:1.27
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - loxa_media:/data/media:ro
+      - loxa_static:/data/static:ro
+
+  redis:
+    image: redis:7
+    restart: always
+    command: ["redis-server","--appendonly","yes"]
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # host OS ရဲ့ 6379 နဲ့ မတင်းကျပ်အောင်
+    ports:
+      - "6380:6379"
+
+  postgres:
+    image: postgres:16
+    env_file:
+      - ./loxa/.env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+  loxa_media:
+  loxa_static:

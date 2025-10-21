@@ -1,0 +1,13 @@
+E0924 12:51:02.932787  257846 dev.go:79] Failed to load initial config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:51:02.934456  257846 watch.go:102] watchAllDir unable to walk dir `/home/htoo-myat-eain/amk/driving_school/dataconnect`: lstat /home/htoo-myat-eain/amk/driving_school/dataconnect: no such file or directory
+I0924 12:51:02.935588  257846 dev.go:102] Listening on address (HTTP + gRPC): 127.0.0.1:50001
+E0924 12:51:12.943443  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:51:22.944439  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:51:32.934982  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:51:42.943921  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:51:52.943501  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:52:02.935704  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:52:12.943515  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:52:22.944531  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:52:32.935754  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
+E0924 12:52:42.943480  257846 watch.go:31] Failed to load config from "/home/htoo-myat-eain/amk/driving_school/dataconnect": could not find dataconnect.yaml in `/home/htoo-myat-eain/amk/driving_school/dataconnect`
