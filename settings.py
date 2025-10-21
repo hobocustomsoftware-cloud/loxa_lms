@@ -75,7 +75,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'loxa.wsgi.application'
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://lms.ai1.com.mm',
+    'https://lms.ai1.com.mm','http://localhost',
+    'http://127.0.0.1',
 ]
 
 # Database

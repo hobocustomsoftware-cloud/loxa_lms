@@ -30,6 +30,8 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 
 CSRF_TRUSTED_ORIGINS = [
     'https://lms.ai1.com.mm',
+    'http://localhost',
+    'http://127.0.0.1',
 ]
 
 # --- Custom User Models ---
