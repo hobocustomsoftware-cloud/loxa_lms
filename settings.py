@@ -9,7 +9,7 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure")
 DEBUG = os.getenv("DEBUG","").lower() in ("1","true","yes")
 
 # ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
-ALLOWED_HOSTS = ['lms.ai1.com.mm', 'web', 'localhost']
+ALLOWED_HOSTS = ['lms.ai1.com.mm','lms2.ai1.com.mm', 'web', 'localhost']
 
 
 
@@ -75,7 +75,9 @@ TEMPLATES = [
 WSGI_APPLICATION = 'loxa.wsgi.application'
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://lms.ai1.com.mm','http://localhost',
+    'https://lms.ai1.com.mm',
+    'https://lms2.ai1.com.mm',
+    'http://localhost',
     'http://127.0.0.1',
 ]
 
