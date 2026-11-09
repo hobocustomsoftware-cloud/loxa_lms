@@ -41,9 +41,11 @@ class MyRouter(DefaultRouter):
             safe_add('auth-token-refresh', 'token_refresh')
 
             # --- Explicitly listing Phone and Google Auth endpoints ---
-            data['phone-auth (API)'] = "POST to /api/auth/phone/request/ and /api/auth/phone/verify/"
-            data['google-auth (API)'] = "POST to /api/auth/google/ with 'access_token' (for mobile/SPA)"
+            data['phone-auth (API)'] = "POST to /api/auth/phone/request/ and /api/auth/phone/verify/ (JWT returned on verify)"
+            data['google-auth-mobile (API)'] = "POST to /api/auth/google/mobile/ with 'id_token' or 'access_token'"
+            data['google-auth-code (API)'] = "POST to /api/auth/google/code/ with 'code' and 'redirect_uri'"
             data['google-auth (Web)'] = request.build_absolute_uri('/api/web-auth/google/login/')
+            data['live-session-token'] = "POST /api/live-sessions/{id}/token/ with {'role':'audience|host'} (Bearer auth)"
 
 
             return Response(data)

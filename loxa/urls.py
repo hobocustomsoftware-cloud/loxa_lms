@@ -11,6 +11,10 @@ from drf_yasg import openapi
 from django.http import JsonResponse
 from django.db import connection
 
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
+
+from api import social_views
+
 
 
 # --- Social Authentication Views ---
@@ -74,17 +78,22 @@ urlpatterns = [
     path("api/accounts/", include("accounts.urls")), 
     path("api/auth/phone/", include("authphone.urls")),
 
-    # 🛑 2. DJ-REST-AUTH: Authentication Endpoints
-    # /api/auth/login/, /api/auth/logout/, /api/auth/registration/ များကို ထောက်ပံ့သည်
+    # JWT token endpoints (Flutter/mobile canonical)
+    path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+
+    # dj-rest-auth endpoints
     path('api/auth/', include('dj_rest_auth.urls')),
     path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
-    
-    # 🛑 3. GOOGLE SOCIAL LOGIN ENDPOINT (Frontend ကနေ စခေါ်မယ့်နေရာ)
-    # /api/auth/google/ ဖြင့် Login Flow ကို စတင်မည်
-    path('api/auth/google/', GoogleLogin.as_view(), name='google_login'),
 
-    # 4. GOOGLE CONNECT ENDPOINT (အကောင့်ချိတ်ဆက်ရန်)
-    # Connect ကို api/auth/google/connect/ လိုမျိုး အနေအထားမှာ ထားသင့်ပါသည်။
+    # Google mobile/SPA token exchange (canonical for Flutter)
+    path('api/auth/google/mobile/', social_views.GoogleMobileAuthView.as_view(), name='google_mobile_auth'),
+    path('api/auth/google/code/', social_views.GoogleExchangeView.as_view(), name='google_code_exchange'),
+    path('api/auth/google/url/', social_views.GoogleAuthUrlView.as_view(), name='google_auth_url'),
+    
+    # dj-rest-auth social login/connect (web/API compatibility)
+    path('api/auth/google/', GoogleLogin.as_view(), name='google_login'),
     path('api/auth/google/connect/', GoogleConnect.as_view(), name='google_connect'), 
     
      # --- Utility and Documentation URLs ---

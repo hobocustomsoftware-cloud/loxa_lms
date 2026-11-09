@@ -1,22 +1,22 @@
-from rest_framework import status, permissions, views
+from rest_framework import permissions, status, views
 from rest_framework.response import Response
-from django.contrib.auth import get_user_model, login
-from django.utils import timezone
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from accounts.serializers import MeSerializer
 
 from .models import PhoneOTP
 from .serializers import RequestOTPSerializer, VerifyOTPSerializer
-from .services import get_sms_backend, generate_otp
+from .services import generate_otp, get_sms_backend
 
-User = get_user_model()
 
 class RequestOTPView(views.APIView):
     permission_classes = [permissions.AllowAny]
-    throttle_scope = "otp_request"  # enable in DRF settings
+    throttle_scope = "otp_request"  # configure in DRF settings
 
     def post(self, request):
         ser = RequestOTPSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        phone = ser.validated_data["phone"] # type: ignore
+        phone = ser.validated_data["phone"]  # type: ignore
 
         code = generate_otp(6)
         otp = PhoneOTP.create_for(phone, code, ttl_sec=300)
@@ -26,6 +26,7 @@ class RequestOTPView(views.APIView):
 
         return Response({"ok": sms.ok, "expires_at": otp.expires_at})
 
+
 class VerifyOTPView(views.APIView):
     permission_classes = [permissions.AllowAny]
     throttle_scope = "otp_verify"
@@ -33,26 +34,39 @@ class VerifyOTPView(views.APIView):
     def post(self, request):
         ser = VerifyOTPSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        phone, code = ser.validated_data["phone"], ser.validated_data["code"] # type: ignore
+        phone, code = ser.validated_data["phone"], ser.validated_data["code"]  # type: ignore
 
-        otp = (PhoneOTP.objects
-            .filter(phone=phone)
+        otp = (
+            PhoneOTP.objects.filter(phone=phone)
             .order_by("-created_at")
-            .first())
+            .first()
+        )
         if not otp or not otp.verify(code):
-            return Response({"detail":"Invalid or expired code"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid or expired code"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # create or get user
-        user, _ = User.objects.get_or_create(phone_number=phone, defaults={"email": f"{phone}@local"})
-        user.is_phone_verified = True # type: ignore
-        user.save(update_fields=["is_phone_verified"])
+        User = __import__("django.contrib.auth").contrib.auth.get_user_model()
+        user = User.objects.filter(phone_number=phone).first()
+        if not user:
+            user = User.objects.create(phone_number=phone, email=f"{phone}@local.invalid", is_active=True)
+        # store verified state on OTP/user if fields exist
+        if hasattr(user, "is_phone_verified"):
+            try:
+                user.is_phone_verified = True  # type: ignore[attr-defined]
+                user.save(update_fields=["is_phone_verified"])
+            except Exception:
+                pass
+        otp.user = user
+        try:
+            otp.save(update_fields=["user"])
+        except Exception:
+            pass
 
-        # (a) Session login
-        login(request, user)
-
-        # (b) or Return JWT (if SimpleJWT on)
-        # from rest_framework_simplejwt.tokens import RefreshToken
-        # refresh = RefreshToken.for_user(user)
-        # return Response({"access": str(refresh.access_token), "refresh": str(refresh)})
-
-        return Response({"ok": True, "user_id": user.id}) # type: ignore
+        refresh = RefreshToken.for_user(user)
+        payload = {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user": MeSerializer(user, context={"request": request}).data,
+        }
+        org = getattr(request, "org", None)
+        payload["org"] = {"id": getattr(org, "id", None), "name": getattr(org, "name", None)} if org else None
+        return Response(payload)

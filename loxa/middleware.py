@@ -36,13 +36,14 @@ except Exception:  # during early migrate, model might not be ready
 class TenantResolver(MiddlewareMixin):
     """
     Read X-Org-ID from request headers and attach request.org.
+    Accepts a numeric primary key or an org slug.
     If header is missing, leave request.org = None (public endpoints can allow it).
     If invalid org id is provided, return 403.
     """
 
     def process_request(self, request):
         org_id = request.headers.get("X-Org-ID")
-        request.org: Optional[object] = None # type: ignore
+        request.org: Optional[object] = None  # type: ignore
 
         # no header → allow None (your view/permission will decide)
         if not org_id:
@@ -52,10 +53,12 @@ class TenantResolver(MiddlewareMixin):
         if Org is None:
             return JsonResponse({"detail": "Org model not ready"}, status=503)
 
-        # validate
         try:
-            request.org = Org.objects.get(id=org_id)
-        except Org.DoesNotExist:
+            if str(org_id).isdigit():
+                request.org = Org.objects.get(id=int(org_id))
+            else:
+                request.org = Org.objects.get(slug=str(org_id))
+        except (Org.DoesNotExist, ValueError, TypeError):
             return JsonResponse({"detail": "Invalid X-Org-ID"}, status=403)
 
         return None

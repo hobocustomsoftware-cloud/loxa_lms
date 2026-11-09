@@ -130,21 +130,58 @@ class LiveSessionViewSet(viewsets.ModelViewSet):
         except Exception:
             return False
 
-    def _user_can_host(user):
-        if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
-            return True
-        # global roles via groups
-        allow_groups = {"super_admin","admin","moderator","editor","teacher"}
-        if user.groups.filter(name__in=allow_groups).exists(): # type: ignore
-            return True
-        # org-scoped roles (optional)
-        # return OrganizationMembership.objects.filter(user=user, role__in=["owner","admin","teacher"]).exists()
-        return False
+    # (removed broken duplicate method)
 
     @action(
-    detail=True, methods=["GET"], url_path="rtc-token",
-    throttle_classes=[TokenThrottle],
-    permission_classes=[permissions.IsAuthenticated],
+        detail=True,
+        methods=["POST"],
+        url_path="token",
+        throttle_classes=[TokenThrottle],
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def session_token(self, request, pk=None):
+        """
+        Canonical Flutter-friendly token endpoint.
+        POST /api/live-sessions/{id}/token/ {"role":"audience|host"}
+        """
+        sess: LiveSession = self.get_object()
+        user = request.user
+        role_q = (request.data.get("role") or request.query_params.get("role") or "audience").lower()
+        want_host = role_q in ("host", "publisher", "broadcaster")
+
+        org = getattr(sess, "org", None)
+        is_owner = (user == sess.owner)
+        if want_host and not (is_owner or _user_can_host(user, org=org)):
+            return response.Response({"detail": "not allowed to publish"}, status=status.HTTP_403_FORBIDDEN)
+
+        app_id = getattr(settings, "AGORA_APP_ID", "")
+        app_cert = getattr(settings, "AGORA_APP_CERT", "")
+        require = getattr(settings, "AGORA_REQUIRE_CREDENTIALS", not settings.DEBUG)
+        if require and not (app_id and app_cert):
+            return response.Response({"detail": "agora credentials not configured"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if not (app_id and app_cert):
+            return response.Response({"detail": "agora creds missing"}, status=500)
+
+        expire_in = int(getattr(settings, "AGORA_TOKEN_TTL_SEC", 3600) or 3600)
+        expire_at = int(time.time()) + expire_in
+        uid = _uid_for(user)
+        role = ROLE_PUBLISHER if want_host else ROLE_SUBSCRIBER
+        token = RtcTokenBuilder.buildTokenWithUid(app_id, app_cert, sess.channel_name, uid, role, expire_at)
+        return response.Response({
+            "app_id": app_id,
+            "token": token,
+            "rtc_token": token,
+            "channel": sess.channel_name,
+            "uid": uid,
+            "role": "host" if want_host else "audience",
+            "expires_in": expire_in,
+            "expire_at": expire_at,
+        })
+
+    @action(
+        detail=True, methods=["GET"], url_path="rtc-token",
+        throttle_classes=[TokenThrottle],
+        permission_classes=[permissions.IsAuthenticated],
     )
     def rtc_token(self, request, pk=None):
         sess: LiveSession = self.get_object()
@@ -164,21 +201,27 @@ class LiveSessionViewSet(viewsets.ModelViewSet):
 
         app_id = getattr(settings, "AGORA_APP_ID", "")
         app_cert = getattr(settings, "AGORA_APP_CERT", "")
+        require = getattr(settings, "AGORA_REQUIRE_CREDENTIALS", not settings.DEBUG)
+        if require and not (app_id and app_cert):
+            return response.Response({"detail": "agora credentials not configured"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if not app_id or not app_cert:
             return response.Response({"detail": "agora creds missing"}, status=500)
 
-        expire_at = int(time.time()) + 60 * 60
+        expire_in = int(getattr(settings, "AGORA_TOKEN_TTL_SEC", 3600) or 3600)
+        expire_at = int(time.time()) + expire_in
         uid = _uid_for(user)
-        role = 1 if want_host else 2  # 1=Publisher, 2=Subscriber
+        role = ROLE_PUBLISHER if want_host else ROLE_SUBSCRIBER
 
         token = RtcTokenBuilder.buildTokenWithUid(
             app_id, app_cert, sess.channel_name, uid, role, expire_at
         )
         return response.Response({
             "token": token,
+            "rtc_token": token,
             "channel": sess.channel_name,
             "uid": uid,
             "role": "host" if want_host else "audience",
+            "expires_in": expire_in,
             "expire_at": expire_at,
             "app_id": app_id,
         })

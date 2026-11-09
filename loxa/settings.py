@@ -5,16 +5,34 @@ from corsheaders.defaults import default_headers
 
 # --- Basic Django Setup ---
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_list(name: str, default: list[str] | None = None) -> list[str]:
+    raw = os.getenv(name)
+    if raw is None:
+        return list(default or [])
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-development-key")
-DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
-#ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
-ALLOWED_HOSTS = ['lms.ai1.com.mm','lms2.ai1.com.mm', 'web', 'localhost']
+DEBUG = _env_bool("DJANGO_DEBUG", True)
+ALLOWED_HOSTS = _env_list(
+    "DJANGO_ALLOWED_HOSTS",
+    ["lms.ai1.com.mm", "lms2.ai1.com.mm", "web", "localhost", "127.0.0.1", "10.0.2.2"],
+)
 ROOT_URLCONF = 'loxa.urls'
 WSGI_APPLICATION = 'loxa.wsgi.application'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
-USE_I1N = True
+USE_I18N = True
 USE_TZ = True
 
 SITE_ID = 1 # Required by django-allauth
@@ -28,12 +46,21 @@ CSRF_COOKIE_SECURE = False
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://lms.ai1.com.mm',
-    'https://lms2.ai1.com.mm',
-    'http://localhost',
-    'http://127.0.0.1',
-]
+CSRF_TRUSTED_ORIGINS = _env_list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    [
+        'https://lms.ai1.com.mm',
+        'https://lms2.ai1.com.mm',
+        'http://localhost',
+        'http://127.0.0.1',
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:8080',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:8080',
+    ],
+)
 
 # --- Custom User Models ---
 AUTH_USER_MODEL = "accounts.User"
@@ -153,9 +180,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # --- Static and Media Files ---
 STATIC_URL = "/static/"
-STATIC_ROOT = "/data/static"
+STATIC_ROOT = os.getenv("STATIC_ROOT", "/data/static")
 MEDIA_URL = "/media/"
-MEDIA_ROOT = "/data/media"
+MEDIA_ROOT = os.getenv("MEDIA_ROOT", "/data/media")
 STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -172,6 +199,12 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
+    "DEFAULT_THROTTLE_RATES": {
+        "otp_request": os.getenv("THROTTLE_OTP_REQUEST", "10/hour"),
+        "otp_verify": os.getenv("THROTTLE_OTP_VERIFY", "20/hour"),
+        "agora_token": os.getenv("THROTTLE_AGORA_TOKEN", "120/hour"),
+        "session_join": os.getenv("THROTTLE_SESSION_JOIN", "120/hour"),
+    },
 }
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
@@ -231,9 +264,10 @@ if not DEBUG:
 #     }
 # }
 
-# Set the correct site URL for production
 if not DEBUG:
-    SITE_URL = "http://localhost:8000/"
+    SITE_URL = os.getenv("SITE_URL", "https://lms.ai1.com.mm/")
+else:
+    SITE_URL = os.getenv("SITE_URL", "http://localhost:8000/")
 
 # Social Auth Configuration (for social-auth-app-django)
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.getenv('GOOGLE_CLIENT_ID')
@@ -244,36 +278,38 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_EXTRA_DATA = ['username', 'first_name', 'last_name']
 
 # --- CORS Configuration ---
 if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True # For development only
+    CORS_ALLOW_ALL_ORIGINS = _env_bool("CORS_ALLOW_ALL_ORIGINS", True)
 else:
-    # Production CORS settings
-    CORS_ALLOWED_ORIGINS = [
-        "https://lms.myanmarlink.online",
-        "https://lms.myanmarlink.online",
-        # Add your production domains here
-    ]
+    CORS_ALLOW_ALL_ORIGINS = _env_bool("CORS_ALLOW_ALL_ORIGINS", False)
+    CORS_ALLOWED_ORIGINS = _env_list(
+        "CORS_ALLOWED_ORIGINS",
+        [
+            "https://lms.ai1.com.mm",
+            "https://lms2.ai1.com.mm",
+            "https://lms.myanmarlink.online",
+        ],
+    )
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-org-id",
+    "x-org-id".upper(),
+]
 
 # --- Production Security Settings ---
 if not DEBUG:
-    # Force HTTPS in production
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", True)
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", True)
+    SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", True)
+
     # Session security
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
 
-# Always use HTTPS for OAuth redirects in production
-if not DEBUG:
-    USE_HTTPS = True
-else:
-    USE_HTTPS = False
+USE_HTTPS = _env_bool("USE_HTTPS", not DEBUG)
 
 # --- Other Service Configurations (Redis, Celery, Agora, Sentry, etc.) ---
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
@@ -293,9 +329,10 @@ CHANNEL_LAYERS = {
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
-AGORA_APP_ID = os.getenv("AGORA_APP_ID", "ddf12d43c7f446aaaad63571b86f348d")
-AGORA_APP_CERT = os.getenv("AGORA_APP_CERT", "21509bc3f9eb4753857c83389329da24")
+AGORA_APP_ID = os.getenv("AGORA_APP_ID", "")
+AGORA_APP_CERT = os.getenv("AGORA_APP_CERT", "")
 AGORA_TOKEN_TTL_SEC = int(os.getenv("AGORA_TOKEN_TTL_SEC", "3600"))
+AGORA_REQUIRE_CREDENTIALS = _env_bool("AGORA_REQUIRE_CREDENTIALS", not DEBUG)
 
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
